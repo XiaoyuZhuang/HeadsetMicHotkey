@@ -1,0 +1,16 @@
+# Runtime logs
+HeadsetButtonHotkey/logs/
+logs/
+
+# Generated audio keep-alive files
+*.wav
+
+# PowerShell and Windows noise
+*.tmp
+*.log
+Thumbs.db
+Desktop.ini
+
+# Editor noise
+.vscode/
+.idea/

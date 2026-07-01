@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "targetHotkey": {
+    "modifier": "LShift",
+    "key": "Z"
+  },
+  "timing": {
+    "holdMs": 140,
+    "cooldownMs": 500,
+    "preSendDelayMs": 120
+  },
+  "audioKeepAlive": {
+    "enabled": true,
+    "waveFrequencyHz": 220,
+    "waveSeconds": 5
+  },
+  "statusSound": {
+    "enabled": true
+  },
+  "logging": {
+    "enabled": true,
+    "directory": "logs"
+  },
+  "tray": {
+    "enabled": true,
+    "showBalloonOnStart": true
+  }
+}
