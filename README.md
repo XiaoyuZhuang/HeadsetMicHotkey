@@ -1,5 +1,7 @@
 # HeadsetMicHotkey
 
+[中文说明](README.zh-CN.md) | English
+
 A tiny Windows tray utility that maps a headset play/pause button to a configurable hotkey. It was built for voice input workflows where an inline headset microphone is close to your mouth, and the headset button becomes a quick dictation trigger.
 
 By default, the app maps the headset play/pause button to `Left Shift + Z`.
