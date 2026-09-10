@@ -5,6 +5,11 @@ logs/
 # Generated audio keep-alive files
 *.wav
 
+# v2 local build output
+HeadsetMicHotkeyV2/bin/
+HeadsetMicHotkeyV2/obj/
+HeadsetMicHotkeyV2/app.ico
+
 # PowerShell and Windows noise
 *.tmp
 *.log
