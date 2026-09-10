@@ -8,6 +8,9 @@ on:
       - ".github/workflows/build-v2-gui.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -15,18 +18,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply source fix
+      - name: Fix source binding once
         shell: pwsh
         run: |
           $path = "HeadsetMicHotkeyV2\Program.cs"
           $source = Get-Content -LiteralPath $path -Raw
           $old = 'this.mainForm.RequestExit += ExitApplication;'
           $new = 'this.mainForm.RequestExit += delegate { ExitApplication(); };'
-          if (-not $source.Contains($old)) {
-            throw "Expected source line was not found."
+          if ($source.Contains($old)) {
+            $source = $source.Replace($old, $new)
+            Set-Content -LiteralPath $path -Value $source -Encoding UTF8
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add HeadsetMicHotkeyV2/Program.cs
+            git commit -m "Fix RequestExit event binding"
+            git push origin HEAD:v2-gui
           }
-          $source = $source.Replace($old, $new)
-          Set-Content -LiteralPath $path -Value $source -Encoding UTF8
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -41,7 +48,7 @@ jobs:
         shell: pwsh
         run: |
           $exe = Get-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe"
-          Write-Host ("EXE size: {0:N2} MB" -f ($exe.Length / 1MB))
+          Write-Host ("EXE size: {0:N2} MB ({1:N0} bytes)" -f ($exe.Length / 1MB), $exe.Length)
 
       - name: Package artifact
         shell: pwsh
