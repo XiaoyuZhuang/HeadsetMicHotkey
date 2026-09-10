@@ -1,12 +1,15 @@
-name: Build HeadsetMicHotkey v2 GUI
+name: Build HeadsetMicHotkey Windows EXE
 
 on:
   push:
-    branches: [ "v2-gui" ]
+    branches: [ "main" ]
     paths:
       - "HeadsetMicHotkeyV2/**"
       - ".github/workflows/build-v2-gui.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -34,15 +37,31 @@ jobs:
           $exe = Get-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe"
           Write-Host ("EXE size: {0:N2} MB ({1:N0} bytes)" -f ($exe.Length / 1MB), $exe.Length)
 
-      - name: Package artifact
+      - name: Prepare EXE
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
-          Copy-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe" "artifact\HeadsetMicHotkey.exe"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe" "artifact\HeadsetMicHotkey.exe" -Force
+          Copy-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe" "dist\HeadsetMicHotkey.exe" -Force
 
-      - name: Upload EXE
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HeadsetMicHotkey-v2-Windows
+          name: HeadsetMicHotkey-v2.0.1-Windows
           path: artifact/HeadsetMicHotkey.exe
           if-no-files-found: error
+
+      - name: Publish latest EXE to repository
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f dist/HeadsetMicHotkey.exe
+          $changes = git status --porcelain -- dist/HeadsetMicHotkey.exe
+          if ($changes) {
+            git commit -m "Update compiled HeadsetMicHotkey.exe [skip ci]"
+            git push
+          } else {
+            Write-Host "Compiled EXE is unchanged; nothing to publish."
+          }
