@@ -1,0 +1,37 @@
+name: Import README screenshot
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/tmp/screenshot/**"
+      - ".github/workflows/import-screenshot.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decode screenshot
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path assets/screenshots | Out-Null
+          $parts = Get-ChildItem ".github/tmp/screenshot/*.b64" | Sort-Object Name
+          $base64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ""
+          [IO.File]::WriteAllBytes("assets/screenshots/headset-mic-hotkey-v2.0.1.jpg", [Convert]::FromBase64String($base64))
+
+      - name: Commit screenshot and remove import files
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          Remove-Item -Recurse -Force .github/tmp/screenshot
+          Remove-Item -Force .github/workflows/import-screenshot.yml
+          git add -A
+          git commit -m "Add HeadsetMicHotkey v2.0.1 UI screenshot"
+          git push origin main
