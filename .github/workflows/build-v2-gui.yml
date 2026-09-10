@@ -8,32 +8,12 @@ on:
       - ".github/workflows/build-v2-gui.yml"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Fix source binding once
-        shell: pwsh
-        run: |
-          $path = "HeadsetMicHotkeyV2\Program.cs"
-          $source = Get-Content -LiteralPath $path -Raw
-          $old = 'this.mainForm.RequestExit += ExitApplication;'
-          $new = 'this.mainForm.RequestExit += delegate { ExitApplication(); };'
-          if ($source.Contains($old)) {
-            $source = $source.Replace($old, $new)
-            Set-Content -LiteralPath $path -Value $source -Encoding UTF8
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add HeadsetMicHotkeyV2/Program.cs
-            git commit -m "Fix RequestExit event binding"
-            git push origin HEAD:v2-gui
-          }
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
