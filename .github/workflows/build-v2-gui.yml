@@ -15,6 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Generate AI microphone icon
+        shell: powershell
+        run: .\HeadsetMicHotkeyV2\generate-icon.ps1
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
