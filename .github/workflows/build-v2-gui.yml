@@ -1,0 +1,44 @@
+name: Build HeadsetMicHotkey v2 GUI
+
+on:
+  push:
+    branches: [ "v2-gui" ]
+    paths:
+      - "HeadsetMicHotkeyV2/**"
+      - ".github/workflows/build-v2-gui.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore
+        run: msbuild HeadsetMicHotkeyV2\HeadsetMicHotkey.csproj /t:Restore /p:Configuration=Release
+
+      - name: Build
+        run: msbuild HeadsetMicHotkeyV2\HeadsetMicHotkey.csproj /p:Configuration=Release /p:RestorePackages=false
+
+      - name: Show EXE size
+        shell: pwsh
+        run: |
+          $exe = Get-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe"
+          Write-Host ("EXE size: {0:N2} MB" -f ($exe.Length / 1MB))
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item "HeadsetMicHotkeyV2\bin\Release\net48\HeadsetMicHotkey.exe" "artifact\HeadsetMicHotkey.exe"
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeadsetMicHotkey-v2-Windows
+          path: artifact/HeadsetMicHotkey.exe
+          if-no-files-found: error
