@@ -15,8 +15,8 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyDescription("Map a headset media button to a customizable Windows hotkey")]
 [assembly: System.Reflection.AssemblyCompany("XiaoyuZhuang")]
 [assembly: System.Reflection.AssemblyProduct("Headset Mic Hotkey")]
-[assembly: System.Reflection.AssemblyVersion("2.0.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("2.0.0.0")]
+[assembly: System.Reflection.AssemblyVersion("2.0.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("2.0.1.0")]
 
 namespace HeadsetMicHotkey
 {
@@ -40,7 +40,10 @@ namespace HeadsetMicHotkey
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 AppSettings settings = SettingsStore.Load();
-                bool startupLaunch = Array.Exists(args, delegate(string s) { return string.Equals(s, "--startup", StringComparison.OrdinalIgnoreCase); });
+                bool startupLaunch = Array.Exists(args, delegate(string s)
+                {
+                    return string.Equals(s, "--startup", StringComparison.OrdinalIgnoreCase);
+                });
                 Application.Run(new HotkeyApplicationContext(settings, startupLaunch));
             }
         }
@@ -58,16 +61,18 @@ namespace HeadsetMicHotkey
         public HotkeyApplicationContext(AppSettings settings, bool startupLaunch)
         {
             this.settings = settings;
-            this.mapper = new KeyboardMapper(settings);
-            this.mapper.Triggered += Mapper_Triggered;
+            mapper = new KeyboardMapper(settings);
+            mapper.HeadsetDetected += Mapper_HeadsetDetected;
+            mapper.HotkeySent += Mapper_HotkeySent;
 
-            this.mainForm = new MainForm(settings, mapper);
-            this.mainForm.RequestExit += delegate { ExitApplication(); };
-            this.mainForm.SettingsChanged += SettingsChanged;
+            mainForm = new MainForm(settings, mapper);
+            mainForm.RequestExit += delegate { ExitApplication(); };
+            mainForm.SettingsChanged += SettingsChanged;
 
             ContextMenuStrip menu = new ContextMenuStrip();
             ToolStripMenuItem open = new ToolStripMenuItem("Open Headset Mic Hotkey");
             open.Click += delegate { ShowMainWindow(); };
+
             ToolStripMenuItem toggle = new ToolStripMenuItem(settings.Enabled ? "Pause mapping" : "Enable mapping");
             toggle.Click += delegate
             {
@@ -75,14 +80,19 @@ namespace HeadsetMicHotkey
                 mapper.Enabled = settings.Enabled;
                 SettingsStore.Save(settings);
                 mainForm.RefreshState();
+                trayIcon.Text = BuildTrayText();
                 toggle.Text = settings.Enabled ? "Pause mapping" : "Enable mapping";
             };
+
             ToolStripMenuItem test = new ToolStripMenuItem("Test hotkey");
             test.Click += delegate { mapper.Test(); };
+
             ToolStripMenuItem logs = new ToolStripMenuItem("Open log folder");
             logs.Click += delegate { Logger.OpenFolder(); };
+
             ToolStripMenuItem exit = new ToolStripMenuItem("Exit");
             exit.Click += delegate { ExitApplication(); };
+
             menu.Items.Add(open);
             menu.Items.Add(toggle);
             menu.Items.Add(test);
@@ -92,7 +102,8 @@ namespace HeadsetMicHotkey
             menu.Items.Add(exit);
 
             trayIcon = new NotifyIcon();
-            trayIcon.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            try { trayIcon.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+            catch { trayIcon.Icon = SystemIcons.Application; }
             trayIcon.Text = BuildTrayText();
             trayIcon.ContextMenuStrip = menu;
             trayIcon.Visible = true;
@@ -112,15 +123,22 @@ namespace HeadsetMicHotkey
             return text.Length > 63 ? text.Substring(0, 63) : text;
         }
 
-        private void Mapper_Triggered(object sender, EventArgs e)
+        private void Mapper_HeadsetDetected(object sender, EventArgs e)
         {
-            if (mainForm.IsHandleCreated)
+            if (!mainForm.IsHandleCreated) return;
+            mainForm.BeginInvoke((MethodInvoker)delegate
             {
-                mainForm.BeginInvoke((MethodInvoker)delegate
-                {
-                    mainForm.SetLastTrigger(DateTime.Now);
-                });
-            }
+                mainForm.SetActivity("Headset button detected • sending " + HotkeyNames.ToDisplayString(settings.TargetHotkey));
+            });
+        }
+
+        private void Mapper_HotkeySent(object sender, EventArgs e)
+        {
+            if (!mainForm.IsHandleCreated) return;
+            mainForm.BeginInvoke((MethodInvoker)delegate
+            {
+                mainForm.SetActivity("Hotkey sent • " + HotkeyNames.ToDisplayString(settings.TargetHotkey) + " • " + DateTime.Now.ToString("HH:mm:ss"));
+            });
         }
 
         private void SettingsChanged(object sender, EventArgs e)
@@ -148,8 +166,7 @@ namespace HeadsetMicHotkey
 
         private void ShowMainWindow()
         {
-            if (!mainForm.Visible)
-                mainForm.Show();
+            if (!mainForm.Visible) mainForm.Show();
             if (mainForm.WindowState == FormWindowState.Minimized)
                 mainForm.WindowState = FormWindowState.Normal;
             mainForm.Activate();
@@ -176,12 +193,12 @@ namespace HeadsetMicHotkey
         private readonly KeyboardMapper mapper;
         private Label statusLabel;
         private Label hotkeyLabel;
-        private Label lastTriggerLabel;
+        private Label activityLabel;
         private Button enabledButton;
         private Button audioButton;
         private Button startupButton;
-        public bool AllowClose { get; set; }
 
+        public bool AllowClose { get; set; }
         public event EventHandler RequestExit;
         public event EventHandler SettingsChanged;
 
@@ -191,12 +208,14 @@ namespace HeadsetMicHotkey
             this.mapper = mapper;
 
             Text = "Headset Mic Hotkey";
-            Width = 560;
-            Height = 610;
-            MinimumSize = new Size(520, 570);
+            Width = 600;
+            Height = 740;
+            MinimumSize = new Size(560, 700);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 10F);
             KeyPreview = true;
+            AutoScaleMode = AutoScaleMode.Dpi;
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             FormClosing += MainForm_FormClosing;
 
             BuildUi();
@@ -208,17 +227,19 @@ namespace HeadsetMicHotkey
         {
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
-            root.Padding = new Padding(28, 22, 28, 24);
-            root.RowCount = 8;
+            root.Padding = new Padding(28, 22, 28, 22);
+            root.AutoScroll = true;
+            root.RowCount = 9;
             root.ColumnCount = 1;
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 220));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             Controls.Add(root);
 
             Label title = new Label();
@@ -246,8 +267,8 @@ namespace HeadsetMicHotkey
             cardLayout.ColumnCount = 1;
             cardLayout.RowCount = 4;
             cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-            cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
             cardLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             card.Controls.Add(cardLayout);
 
@@ -275,15 +296,15 @@ namespace HeadsetMicHotkey
             cardButtons.WrapContents = false;
             cardButtons.AutoSize = true;
             cardButtons.Anchor = AnchorStyles.None;
-            Button record = MakeButton("Record new hotkey", 160);
+            Button record = MakeButton("Record new hotkey", 170);
             record.Click += Record_Click;
-            Button test = MakeButton("Test", 90);
+            Button test = MakeButton("Test", 92);
             test.Click += delegate { mapper.Test(); };
             cardButtons.Controls.Add(record);
             cardButtons.Controls.Add(test);
             cardLayout.Controls.Add(cardButtons, 0, 3);
 
-            enabledButton = MakeWideSettingButton("Mapping", "");
+            enabledButton = MakeWideSettingButton();
             enabledButton.Click += delegate
             {
                 settings.Enabled = !settings.Enabled;
@@ -293,7 +314,7 @@ namespace HeadsetMicHotkey
             };
             root.Controls.Add(enabledButton, 0, 3);
 
-            audioButton = MakeWideSettingButton("Audio keep-alive", "Keeps some headset buttons responsive");
+            audioButton = MakeWideSettingButton();
             audioButton.Click += delegate
             {
                 settings.AudioKeepAlive = !settings.AudioKeepAlive;
@@ -302,7 +323,7 @@ namespace HeadsetMicHotkey
             };
             root.Controls.Add(audioButton, 0, 4);
 
-            startupButton = MakeWideSettingButton("Run at startup", "Starts silently in the tray");
+            startupButton = MakeWideSettingButton();
             startupButton.Click += delegate
             {
                 settings.RunAtStartup = !settings.RunAtStartup;
@@ -312,23 +333,28 @@ namespace HeadsetMicHotkey
             };
             root.Controls.Add(startupButton, 0, 5);
 
-            lastTriggerLabel = new Label();
-            lastTriggerLabel.Dock = DockStyle.Top;
-            lastTriggerLabel.Height = 40;
-            lastTriggerLabel.TextAlign = ContentAlignment.MiddleLeft;
-            lastTriggerLabel.Text = "Waiting for headset button...";
-            root.Controls.Add(lastTriggerLabel, 0, 6);
+            activityLabel = new Label();
+            activityLabel.Dock = DockStyle.Fill;
+            activityLabel.TextAlign = ContentAlignment.MiddleLeft;
+            activityLabel.AutoEllipsis = true;
+            activityLabel.Text = "Ready • waiting for headset button";
+            root.Controls.Add(activityLabel, 0, 6);
+
+            Panel spacer = new Panel();
+            spacer.Dock = DockStyle.Fill;
+            root.Controls.Add(spacer, 0, 7);
 
             FlowLayoutPanel bottom = new FlowLayoutPanel();
             bottom.Dock = DockStyle.Fill;
             bottom.FlowDirection = FlowDirection.RightToLeft;
-            Button advanced = MakeButton("Advanced", 105);
-            advanced.Click += Advanced_Click;
-            Button exit = MakeButton("Exit", 80);
+            bottom.WrapContents = false;
+            Button exit = MakeButton("Exit", 82);
             exit.Click += delegate { if (RequestExit != null) RequestExit(this, EventArgs.Empty); };
+            Button advanced = MakeButton("Advanced", 110);
+            advanced.Click += Advanced_Click;
             bottom.Controls.Add(exit);
             bottom.Controls.Add(advanced);
-            root.Controls.Add(bottom, 0, 7);
+            root.Controls.Add(bottom, 0, 8);
         }
 
         private Button MakeButton(string text, int width)
@@ -336,7 +362,7 @@ namespace HeadsetMicHotkey
             Button b = new Button();
             b.Text = text;
             b.Width = width;
-            b.Height = 34;
+            b.Height = 36;
             b.FlatStyle = FlatStyle.Flat;
             b.FlatAppearance.BorderSize = 1;
             b.Margin = new Padding(5);
@@ -344,15 +370,15 @@ namespace HeadsetMicHotkey
             return b;
         }
 
-        private Button MakeWideSettingButton(string title, string subtitle)
+        private Button MakeWideSettingButton()
         {
             Button b = new Button();
             b.Dock = DockStyle.Fill;
             b.Margin = new Padding(0, 5, 0, 5);
             b.FlatStyle = FlatStyle.Flat;
             b.TextAlign = ContentAlignment.MiddleLeft;
-            b.Padding = new Padding(12, 0, 12, 0);
-            b.Tag = new string[] { title, subtitle };
+            b.Padding = new Padding(14, 0, 12, 0);
+            b.Cursor = Cursors.Hand;
             return b;
         }
 
@@ -366,6 +392,7 @@ namespace HeadsetMicHotkey
                 {
                     settings.TargetHotkey = dialog.CapturedHotkey;
                     RaiseSettingsChanged();
+                    SetActivity("New hotkey saved • " + HotkeyNames.ToDisplayString(settings.TargetHotkey));
                 }
             }
             mapper.Enabled = wasEnabled;
@@ -401,12 +428,12 @@ namespace HeadsetMicHotkey
 
         private void UpdateSettingButton(Button button, string title, string subtitle, bool enabled)
         {
-            button.Text = title + "     " + (enabled ? "ON" : "OFF") + (string.IsNullOrEmpty(subtitle) ? "" : Environment.NewLine + subtitle);
+            button.Text = title + "     " + (enabled ? "ON" : "OFF") + Environment.NewLine + subtitle;
         }
 
-        public void SetLastTrigger(DateTime time)
+        public void SetActivity(string text)
         {
-            lastTriggerLabel.Text = "Last trigger: " + time.ToString("HH:mm:ss") + "    " + HotkeyNames.ToDisplayString(settings.TargetHotkey);
+            activityLabel.Text = text;
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -434,13 +461,16 @@ namespace HeadsetMicHotkey
         {
             this.settings = settings;
             Text = "Advanced settings";
-            Width = 440;
-            Height = 470;
+            Width = 480;
+            Height = 540;
+            MinimumSize = new Size(460, 500);
             StartPosition = FormStartPosition.CenterParent;
             Font = new Font("Segoe UI", 10F);
+            AutoScaleMode = AutoScaleMode.Dpi;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
             TableLayoutPanel layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
@@ -449,6 +479,8 @@ namespace HeadsetMicHotkey
             layout.RowCount = 8;
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+            for (int i = 0; i < 7; i++) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(layout);
 
             preDelay = AddNumber(layout, 0, "Pre-send delay (ms)", settings.PreSendDelayMs, 0, 2000);
@@ -461,6 +493,7 @@ namespace HeadsetMicHotkey
             sound.Text = "Play a sound after triggering";
             sound.Checked = settings.StatusSound;
             sound.AutoSize = true;
+            sound.Anchor = AnchorStyles.Left;
             layout.Controls.Add(sound, 0, 5);
             layout.SetColumnSpan(sound, 2);
 
@@ -468,19 +501,23 @@ namespace HeadsetMicHotkey
             startMinimized.Text = "Start in tray when launched at Windows startup";
             startMinimized.Checked = settings.StartMinimized;
             startMinimized.AutoSize = true;
+            startMinimized.Anchor = AnchorStyles.Left;
             layout.Controls.Add(startMinimized, 0, 6);
             layout.SetColumnSpan(startMinimized, 2);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.FlowDirection = FlowDirection.RightToLeft;
-            buttons.Dock = DockStyle.Fill;
+            buttons.Dock = DockStyle.Bottom;
+            buttons.Height = 44;
             Button ok = new Button();
             ok.Text = "Save";
             ok.Width = 90;
+            ok.Height = 34;
             ok.DialogResult = DialogResult.OK;
             Button cancel = new Button();
             cancel.Text = "Cancel";
             cancel.Width = 90;
+            cancel.Height = 34;
             cancel.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(ok);
             buttons.Controls.Add(cancel);
@@ -512,7 +549,7 @@ namespace HeadsetMicHotkey
             number.Minimum = min;
             number.Maximum = max;
             number.Value = Math.Max(min, Math.Min(max, value));
-            number.Dock = DockStyle.Fill;
+            number.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             layout.Controls.Add(label, 0, row);
             layout.Controls.Add(number, 1, row);
             return number;
@@ -530,13 +567,15 @@ namespace HeadsetMicHotkey
         public HotkeyRecorderDialog()
         {
             Text = "Record hotkey";
-            Width = 440;
-            Height = 230;
+            Width = 460;
+            Height = 250;
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             Font = new Font("Segoe UI", 10F);
+            AutoScaleMode = AutoScaleMode.Dpi;
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
             display = new Label();
             display.Dock = DockStyle.Fill;
@@ -576,9 +615,13 @@ namespace HeadsetMicHotkey
 
             if (HotkeyNames.IsModifier(vk))
             {
-                if (down) modifiers.Add(HotkeyNames.NormalizeModifier(vk));
-                if (up) modifiers.Remove(HotkeyNames.NormalizeModifier(vk));
-                BeginInvoke((MethodInvoker)delegate { display.Text = HotkeyNames.ToDisplayString(new HotkeyDefinition(new List<int>(modifiers), 0)) + " ..."; });
+                int normalized = HotkeyNames.NormalizeModifier(vk);
+                if (down) modifiers.Add(normalized);
+                if (up) modifiers.Remove(normalized);
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    display.Text = HotkeyNames.ToDisplayString(new HotkeyDefinition(new List<int>(modifiers), 0)) + " ...";
+                });
                 return (IntPtr)1;
             }
 
@@ -613,8 +656,10 @@ namespace HeadsetMicHotkey
         private IntPtr hook;
         private NativeMethods.LowLevelKeyboardProc proc;
         private long lastPressTicks;
+
         public bool Enabled { get; set; }
-        public event EventHandler Triggered;
+        public event EventHandler HeadsetDetected;
+        public event EventHandler HotkeySent;
 
         public KeyboardMapper(AppSettings settings)
         {
@@ -627,6 +672,7 @@ namespace HeadsetMicHotkey
             proc = HookCallback;
             hook = NativeMethods.SetKeyboardHook(proc);
             Logger.Write("Keyboard hook installed: " + (hook != IntPtr.Zero));
+            Logger.Write("Process64=" + Environment.Is64BitProcess + " INPUT size=" + NativeMethods.InputSize);
         }
 
         public void Reload(AppSettings newSettings)
@@ -640,6 +686,7 @@ namespace HeadsetMicHotkey
 
         public void Test()
         {
+            Logger.Write("Manual test requested");
             ThreadPool.QueueUserWorkItem(delegate { SendConfiguredHotkey(); });
         }
 
@@ -664,9 +711,10 @@ namespace HeadsetMicHotkey
                         if (elapsed >= cooldown)
                         {
                             Interlocked.Exchange(ref lastPressTicks, now);
+                            if (HeadsetDetected != null) HeadsetDetected(this, EventArgs.Empty);
                             ThreadPool.QueueUserWorkItem(delegate
                             {
-                                Thread.Sleep(50);
+                                Thread.Sleep(80);
                                 SendConfiguredHotkey();
                             });
                         }
@@ -694,26 +742,49 @@ namespace HeadsetMicHotkey
             if (hotkey.Key == 0) return;
             Logger.Write("Sending " + HotkeyNames.ToDisplayString(hotkey));
 
-            Release(hotkey);
-            Thread.Sleep(Math.Max(0, preDelay));
-            for (int i = 0; i < hotkey.Modifiers.Count; i++) NativeMethods.SendKey((ushort)hotkey.Modifiers[i], false);
-            Thread.Sleep(Math.Max(20, hold));
-            NativeMethods.SendKey((ushort)hotkey.Key, false);
-            Thread.Sleep(Math.Max(20, hold));
-            NativeMethods.SendKey((ushort)hotkey.Key, true);
-            for (int i = hotkey.Modifiers.Count - 1; i >= 0; i--) NativeMethods.SendKey((ushort)hotkey.Modifiers[i], true);
+            List<ushort> modifiers = new List<ushort>();
+            for (int i = 0; i < hotkey.Modifiers.Count; i++)
+                modifiers.Add((ushort)HotkeyNames.ToInjectionVirtualKey(hotkey.Modifiers[i]));
+            ushort key = (ushort)HotkeyNames.ToInjectionVirtualKey(hotkey.Key);
 
+            Release(key, modifiers);
+            Thread.Sleep(Math.Max(0, preDelay));
+
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                NativeMethods.SendKey(modifiers[i], false);
+                if (modifiers.Count > 1) Thread.Sleep(20);
+            }
+
+            Thread.Sleep(Math.Max(40, hold));
+            NativeMethods.SendKey(key, false);
+            Thread.Sleep(Math.Max(40, hold));
+            NativeMethods.SendKey(key, true);
+            Thread.Sleep(60);
+
+            for (int i = modifiers.Count - 1; i >= 0; i--)
+            {
+                NativeMethods.SendKey(modifiers[i], true);
+                if (modifiers.Count > 1) Thread.Sleep(20);
+            }
+
+            Logger.Write("Hotkey sequence completed");
             if (sound)
             {
                 try { SystemSounds.Asterisk.Play(); } catch { }
             }
-            if (Triggered != null) Triggered(this, EventArgs.Empty);
+            if (HotkeySent != null) HotkeySent(this, EventArgs.Empty);
         }
 
-        private void Release(HotkeyDefinition hotkey)
+        private void Release(ushort key, List<ushort> modifiers)
         {
-            NativeMethods.SendKey((ushort)hotkey.Key, true);
-            for (int i = 0; i < hotkey.Modifiers.Count; i++) NativeMethods.SendKey((ushort)hotkey.Modifiers[i], true);
+            NativeMethods.SendKey(key, true);
+            Thread.Sleep(20);
+            for (int i = modifiers.Count - 1; i >= 0; i--)
+            {
+                NativeMethods.SendKey(modifiers[i], true);
+                Thread.Sleep(20);
+            }
         }
 
         public void Dispose()
@@ -729,7 +800,6 @@ namespace HeadsetMicHotkey
     internal sealed class AudioKeepAlive : IDisposable
     {
         private SoundPlayer player;
-        private string wavePath;
 
         public void Start(int frequencyHz, int seconds)
         {
@@ -737,7 +807,7 @@ namespace HeadsetMicHotkey
             {
                 string folder = SettingsStore.AppFolder;
                 Directory.CreateDirectory(folder);
-                wavePath = Path.Combine(folder, "keepalive.wav");
+                string wavePath = Path.Combine(folder, "keepalive.wav");
                 CreateQuietWave(wavePath, Math.Max(20, frequencyHz), Math.Max(1, seconds));
                 player = new SoundPlayer(wavePath);
                 player.Load();
@@ -759,6 +829,7 @@ namespace HeadsetMicHotkey
             short blockAlign = (short)(channels * bits / 8);
             int byteRate = sampleRate * blockAlign;
             int dataSize = count * blockAlign;
+
             using (BinaryWriter writer = new BinaryWriter(File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read)))
             {
                 writer.Write(Encoding.ASCII.GetBytes("RIFF"));
@@ -864,6 +935,14 @@ namespace HeadsetMicHotkey
             return vk;
         }
 
+        public static int ToInjectionVirtualKey(int vk)
+        {
+            if (vk == (int)Keys.ShiftKey) return (int)Keys.LShiftKey;
+            if (vk == (int)Keys.ControlKey) return (int)Keys.LControlKey;
+            if (vk == (int)Keys.Menu) return (int)Keys.LMenu;
+            return vk;
+        }
+
         public static string ToDisplayString(HotkeyDefinition hotkey)
         {
             if (hotkey == null) return "Not set";
@@ -934,6 +1013,7 @@ namespace HeadsetMicHotkey
                     Save(first);
                     return first;
                 }
+
                 JavaScriptSerializer json = new JavaScriptSerializer();
                 AppSettings settings = json.Deserialize<AppSettings>(File.ReadAllText(SettingsPath, Encoding.UTF8));
                 if (settings == null) settings = new AppSettings();
@@ -1087,6 +1167,7 @@ namespace HeadsetMicHotkey
         private const uint KEYEVENTF_KEYUP = 0x0002;
         private const int SW_RESTORE = 9;
         public static readonly UIntPtr InjectedMarker = new UIntPtr(0x484D484B);
+        public static int InputSize { get { return Marshal.SizeOf(typeof(INPUT)); } }
 
         public delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
@@ -1107,10 +1188,25 @@ namespace HeadsetMicHotkey
             public InputUnion u;
         }
 
+        // INPUT is a Win32 union. Keeping every union member is important on x64:
+        // MOUSEINPUT is larger than KEYBDINPUT and determines the native INPUT size (40 bytes).
         [StructLayout(LayoutKind.Explicit)]
         private struct InputUnion
         {
+            [FieldOffset(0)] public MOUSEINPUT mi;
             [FieldOffset(0)] public KEYBDINPUT ki;
+            [FieldOffset(0)] public HARDWAREINPUT hi;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public UIntPtr dwExtraInfo;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -1121,6 +1217,14 @@ namespace HeadsetMicHotkey
             public uint dwFlags;
             public uint time;
             public UIntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct HARDWAREINPUT
+        {
+            public uint uMsg;
+            public ushort wParamL;
+            public ushort wParamH;
         }
 
         public static IntPtr SetKeyboardHook(LowLevelKeyboardProc callback)
@@ -1139,7 +1243,14 @@ namespace HeadsetMicHotkey
             input[0].u.ki.dwFlags = keyUp ? KEYEVENTF_KEYUP : 0u;
             input[0].u.ki.time = 0;
             input[0].u.ki.dwExtraInfo = InjectedMarker;
-            SendInput(1, input, Marshal.SizeOf(typeof(INPUT)));
+
+            uint sent = SendInput(1, input, Marshal.SizeOf(typeof(INPUT)));
+            if (sent != 1)
+            {
+                int error = Marshal.GetLastWin32Error();
+                Logger.Write("SendInput failed vk=0x" + vk.ToString("X") + " up=" + keyUp + " err=" + error + " size=" + Marshal.SizeOf(typeof(INPUT)) + "; using keybd_event fallback");
+                keybd_event((byte)vk, 0, keyUp ? KEYEVENTF_KEYUP : 0u, InjectedMarker);
+            }
         }
 
         public static void ShowExistingWindow()
@@ -1176,6 +1287,8 @@ namespace HeadsetMicHotkey
         private static extern IntPtr GetModuleHandle(string moduleName);
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint SendInput(uint count, INPUT[] inputs, int size);
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr FindWindow(string className, string windowName);
         [DllImport("user32.dll")]
@@ -1186,4 +1299,3 @@ namespace HeadsetMicHotkey
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
     }
 }
-
