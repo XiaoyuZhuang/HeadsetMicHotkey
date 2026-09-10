@@ -15,6 +15,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply source fix
+        shell: pwsh
+        run: |
+          $path = "HeadsetMicHotkeyV2\Program.cs"
+          $source = Get-Content -LiteralPath $path -Raw
+          $old = 'this.mainForm.RequestExit += ExitApplication;'
+          $new = 'this.mainForm.RequestExit += delegate { ExitApplication(); };'
+          if (-not $source.Contains($old)) {
+            throw "Expected source line was not found."
+          }
+          $source = $source.Replace($old, $new)
+          Set-Content -LiteralPath $path -Value $source -Encoding UTF8
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
