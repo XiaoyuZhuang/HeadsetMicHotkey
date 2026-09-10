@@ -62,7 +62,7 @@ namespace HeadsetMicHotkey
             this.mapper.Triggered += Mapper_Triggered;
 
             this.mainForm = new MainForm(settings, mapper);
-            this.mainForm.RequestExit += ExitApplication;
+            this.mainForm.RequestExit += delegate { ExitApplication(); };
             this.mainForm.SettingsChanged += SettingsChanged;
 
             ContextMenuStrip menu = new ContextMenuStrip();
@@ -1186,3 +1186,4 @@ namespace HeadsetMicHotkey
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
     }
 }
+
