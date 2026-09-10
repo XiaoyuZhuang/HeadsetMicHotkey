@@ -2,135 +2,162 @@
 
 中文说明 | [English](README.md)
 
-一个轻量的 Windows 托盘小工具，可以把耳机线控上的播放/暂停键映射成自定义快捷键。它最初是为了语音输入工作流做的：如果你的耳机麦克风离嘴比较近，就可以把耳机按钮变成一个顺手的语音输入触发键。
+一个轻量的 Windows 耳机线控快捷键工具，可以把耳机上的播放/暂停键映射成任意自定义键盘快捷键。它最初是为语音输入场景做的：耳机麦克风离嘴比较近时，可以直接用线控按钮快速触发语音转文字。
 
-默认情况下，程序会把耳机播放/暂停键映射为 `左 Shift + Z`。
+当前推荐版本为 **v2.0.1**。新版已经从原来的 CMD + PowerShell 脚本升级为真正的 Windows GUI 程序：没有命令提示符窗口，不需要手动编辑配置文件，关闭主窗口后只保留系统托盘图标。
 
-## 功能
+## 下载
 
-- 常驻 Windows 系统托盘，不显示多余窗口
-- 将耳机播放/暂停媒体键映射为可配置快捷键
-- 通过静默音频保活，让耳机线控按钮更稳定
-- 支持开机自启安装和卸载
-- 日志保存在程序目录下，方便排查问题
-- 便携式文件夹结构，换位置或换电脑也能用
-- 托盘菜单支持暂停/启用、测试快捷键、打开配置、打开日志和退出
+**推荐直接下载已经编译好的 EXE：**
 
-## 快速开始
+[下载 HeadsetMicHotkey.exe](dist/HeadsetMicHotkey.exe?raw=1)
 
-1. 下载或克隆这个仓库。
-2. 打开 `HeadsetButtonHotkey` 文件夹。
-3. 双击 `start-headset-button-hotkey.cmd`。
-4. 通过系统托盘图标暂停、测试、打开配置、打开日志或退出程序。
+无需安装。下载后直接双击运行即可。
 
-如果想在测试时看到控制台输出，可以运行：
+> 由于目前没有购买商业代码签名证书，Windows 第一次运行时可能提示“未知发布者”或出现 SmartScreen 提示。这不影响程序本身的功能。
 
-```powershell
-HeadsetButtonHotkey\start-headset-button-hotkey-visible.cmd
-```
+## v2.0.1 主要功能
 
-## 开机自启
+- 真正的 Windows GUI EXE，不再依赖 CMD / PowerShell 作为运行宿主
+- 无控制台黑框、无最小化命令提示符窗口
+- 关闭主窗口后自动隐藏到 Windows 系统托盘
+- 双击托盘图标重新打开主界面
+- 单实例运行，避免重复启动多个键盘 Hook
+- 直接在界面中录制自定义快捷键
+- 支持 Ctrl / Shift / Alt / Win 等组合键
+- 支持 F8、Space 等单独按键
+- 内置 **Test**，无需按耳机按钮也能测试当前快捷键
+- 音频保活开关，提高部分 3.5 mm 耳机线控的稳定性
+- 一键设置开机自启
+- 设置自动保存，无需手改 JSON
+- 自动适配 Windows 明暗主题
+- AI + 麦克风应用图标
+- 日志记录与快捷键注入诊断
+- 修正 Win32 `SendInput` 结构，并加入兼容回退逻辑
+- EXE 体积非常小，使用系统已有的 .NET Framework 运行环境
 
-为当前 Windows 用户安装开机自启：
-
-```powershell
-HeadsetButtonHotkey\install-startup.cmd
-```
-
-取消开机自启：
-
-```powershell
-HeadsetButtonHotkey\uninstall-startup.cmd
-```
-
-自启快捷方式会指向当前文件夹。如果你之后移动了程序文件夹，请在新位置重新运行一次 `install-startup.cmd`。
-
-## 配置
-
-编辑这个文件：
+默认映射仍然是：
 
 ```text
-HeadsetButtonHotkey\headset-button-config.json
+耳机播放/暂停键  ->  Shift + Z
 ```
 
-默认配置：
+## 快速使用
 
-```json
-{
-  "enabled": true,
-  "targetHotkey": {
-    "modifier": "LShift",
-    "key": "Z"
-  },
-  "timing": {
-    "holdMs": 140,
-    "cooldownMs": 500,
-    "preSendDelayMs": 120
-  },
-  "audioKeepAlive": {
-    "enabled": true,
-    "waveFrequencyHz": 220,
-    "waveSeconds": 5
-  },
-  "statusSound": {
-    "enabled": true
-  },
-  "logging": {
-    "enabled": true,
-    "directory": "logs"
-  },
-  "tray": {
-    "enabled": true,
-    "showBalloonOnStart": true
-  }
-}
-```
+1. 下载上面的 `HeadsetMicHotkey.exe`。
+2. 双击运行。
+3. 如果默认的 `Shift + Z` 不适合你，点击 **Record new hotkey**。
+4. 在键盘上直接按你想设置的新快捷键。
+5. 按耳机线控的播放/暂停键即可触发。
+6. 配置完成后可以直接关闭主窗口，程序会继续在系统托盘运行。
 
-支持的修饰键名称包括 `LShift`、`RShift`、`Shift`、`LCtrl`、`RCtrl`、`Ctrl`、`LAlt`、`RAlt` 和 `Alt`。
+主界面里保留了最常用的几个功能：
 
-普通单字母按键也支持，例如 `Z`、`A`、`K`。
+- **Mapping**：启用或暂停耳机按键映射
+- **Audio keep-alive**：开启或关闭音频保活
+- **Run at startup**：设置 Windows 开机自动运行
+- **Record new hotkey**：录制新的快捷键
+- **Test**：直接测试当前快捷键
+- **Advanced**：调整延迟、按键保持时间、冷却时间和音频保活参数
 
-## 日志
+## 自定义快捷键
 
-日志会写入：
+新版不需要编辑 JSON。点击 **Record new hotkey** 后直接在键盘上按新的组合即可。
+
+例如可以设置为：
 
 ```text
-HeadsetButtonHotkey\logs
+Shift + Z
+Ctrl + Shift + M
+Ctrl + Alt + Space
+Win + Shift + S
+F8
+Space
 ```
 
-日志文件夹不会被 Git 跟踪。
+设置保存后，下次启动会自动恢复。
 
-## 为什么需要音频保活
+## 系统托盘
 
-有些 3.5mm 耳机线控按钮并不是一个始终在线的普通键盘设备。在部分 Windows 声卡驱动上，播放/暂停键只有在音频会话唤醒耳机或音频端点之后才会稳定生效。
+点击主窗口右上角关闭按钮时，程序不会退出，而是隐藏到 Windows 通知区域。
 
-这个工具会在后台循环播放一个非常安静的自动生成 WAV 文件，用来保持音频链路活跃。如果你的耳机按钮不需要这个机制也能稳定工作，可以在配置里关闭：
+右键托盘图标可以：
 
-```json
-"audioKeepAlive": {
-  "enabled": false
-}
+- 打开主界面
+- 暂停 / 启用映射
+- 测试当前快捷键
+- 打开日志文件夹
+- 完全退出程序
+
+双击托盘图标可以重新打开主窗口。
+
+## 音频保活
+
+有些 3.5 mm 耳机线控按钮并不是始终在线的普通键盘设备。在部分声卡和驱动环境中，音频端点进入休眠后，播放/暂停按键可能不再稳定上报。
+
+HeadsetMicHotkey 可以在后台生成并循环播放一个极低幅度的 WAV 信号，用来保持相关音频链路活跃。
+
+如果你的耳机不需要这一机制也能稳定使用，可以直接在主界面关闭 **Audio keep-alive**。
+
+## 设置与日志位置
+
+新版把设置和日志放在用户目录里，因此以后直接用新 EXE 覆盖旧 EXE，一般不会丢失原来的设置。
+
+程序数据目录：
+
+```text
+%LocalAppData%\HeadsetMicHotkey\
 ```
+
+日志目录：
+
+```text
+%LocalAppData%\HeadsetMicHotkey\logs\
+```
+
+日志会记录耳机按键是否被检测到、程序是否尝试发送快捷键以及快捷键注入情况，方便定位问题。
 
 ## 常见问题
 
-如果托盘程序正在运行，但按耳机按钮没有反应：
+如果界面能检测到耳机按钮，但目标软件没有响应：
 
-- 确认没有同时运行旧的调试版或可见窗口版。
-- 右键托盘图标，选择 `Test hotkey` 测试快捷键发送。
-- 从托盘菜单打开日志文件夹，查看最新日志。
-- 运行 `start-headset-button-hotkey-visible.cmd` 查看实时输出。
-- 如果目标软件是管理员权限运行，这个工具也需要用管理员权限运行。
+1. 先点击 **Test**。如果 Test 能触发目标软件，说明快捷键输出链路基本正常。
+2. 确认你手动按同样的快捷键时，目标软件确实能够响应。
+3. 从托盘菜单打开日志文件夹，查看当天最新日志。
+4. 确认没有同时运行旧版本或另外一个 HeadsetMicHotkey。
+5. 如果目标软件以管理员权限运行，可以尝试让 HeadsetMicHotkey 使用相同权限运行。
 
-调试辅助脚本在 `tools` 文件夹中。
+v2.0.1 已经针对快捷键“检测到了但没有真正发送”的问题修正了 Win32 `SendInput` 数据结构，并加入兼容回退。
 
-## 系统要求
+## 源码与自动构建
 
-- Windows
-- PowerShell
-- 标准 Windows 系统自带的 .NET Framework 相关程序集
+普通用户**不需要自己编译**。
 
-不需要安装额外依赖。
+当前 GUI 版本源码位于：
+
+```text
+HeadsetMicHotkeyV2/
+```
+
+技术栈：
+
+```text
+C# + Windows Forms + .NET Framework 4.8 + Win32 API
+```
+
+GitHub Actions 会自动在 Windows 环境中编译 Release 版本，并生成可直接运行的 EXE。应用图标也会在构建时自动生成并嵌入程序。
+
+如果需要本地编译，可以使用 Visual Studio 或 MSBuild 打开 `HeadsetMicHotkey.csproj`，构建 `Release` 配置即可。
+
+## 旧版
+
+原来的 PowerShell/CMD 版本仍保留在：
+
+```text
+HeadsetButtonHotkey/
+```
+
+它主要用于保留历史实现和调试参考。现在推荐直接使用新版 GUI EXE。
 
 ## 许可证
 
