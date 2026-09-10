@@ -2,135 +2,147 @@
 
 [中文说明](README.zh-CN.md) | English
 
-A tiny Windows tray utility that maps a headset play/pause button to a configurable hotkey. It was built for voice input workflows where an inline headset microphone is close to your mouth, and the headset button becomes a quick dictation trigger.
+A tiny native Windows utility that maps a headset play/pause button to a customizable keyboard shortcut. It was originally built for voice-input workflows, so an inline headset button can become a fast dictation trigger.
 
-By default, the app maps the headset play/pause button to `Left Shift + Z`.
+The current recommended version is **v2.0.1**. It is now a real Windows GUI application: no CMD window, no PowerShell host, no minimized console window, and no manual config editing for normal use.
 
-## Features
+## Download
 
-- Runs quietly in the Windows system tray
-- Maps the headset play/pause media key to a configurable hotkey
-- Keeps the audio endpoint awake with a quiet audio keep-alive loop
-- Supports startup installation and removal
-- Stores logs next to the app for easy debugging
-- Uses a portable folder layout, so the app can be moved between machines
-- Includes tray menu actions for pause/resume, test hotkey, config, logs, and exit
+**Recommended:** download the latest compiled EXE directly from the repository:
 
-## Quick Start
+[Download HeadsetMicHotkey.exe](dist/HeadsetMicHotkey.exe?raw=1)
 
-1. Download or clone this repository.
-2. Open the `HeadsetButtonHotkey` folder.
-3. Double-click `start-headset-button-hotkey.cmd`.
-4. Use the tray icon to pause, test, open config, open logs, or exit.
+No installer is required. Just download the EXE and run it.
 
-To see console output while testing, run:
+> Windows may show an "Unknown publisher" / SmartScreen warning because the executable is not code-signed with a commercial certificate.
 
-```powershell
-HeadsetButtonHotkey\start-headset-button-hotkey-visible.cmd
-```
+## What changed in v2
 
-## Startup
+- Native Windows GUI application
+- Runs as a real `WinExe` with no console window
+- Minimizes to the Windows notification area / system tray
+- Double-click the tray icon to reopen the main window
+- Single-instance protection to avoid duplicate keyboard hooks
+- Record a custom shortcut directly from the keyboard
+- Supports Ctrl / Shift / Alt / Win combinations and single keys such as F8
+- Built-in `Test` action for the selected shortcut
+- Configurable audio keep-alive
+- One-click startup toggle
+- Settings stored automatically under `%LocalAppData%\HeadsetMicHotkey`
+- Automatic light/dark appearance support
+- AI + microphone application icon
+- Diagnostic logging and keyboard-injection fallback handling
+- Very small executable because it targets the .NET Framework already available on standard modern Windows installations
 
-Install startup for the current Windows user:
-
-```powershell
-HeadsetButtonHotkey\install-startup.cmd
-```
-
-Remove startup:
-
-```powershell
-HeadsetButtonHotkey\uninstall-startup.cmd
-```
-
-The startup shortcut points to the current folder, so if you move the app later, run `install-startup.cmd` again from the new location.
-
-## Configuration
-
-Edit:
+The default mapping remains:
 
 ```text
-HeadsetButtonHotkey\headset-button-config.json
+Headset Play / Pause  ->  Shift + Z
 ```
 
-Default configuration:
+## Quick start
 
-```json
-{
-  "enabled": true,
-  "targetHotkey": {
-    "modifier": "LShift",
-    "key": "Z"
-  },
-  "timing": {
-    "holdMs": 140,
-    "cooldownMs": 500,
-    "preSendDelayMs": 120
-  },
-  "audioKeepAlive": {
-    "enabled": true,
-    "waveFrequencyHz": 220,
-    "waveSeconds": 5
-  },
-  "statusSound": {
-    "enabled": true
-  },
-  "logging": {
-    "enabled": true,
-    "directory": "logs"
-  },
-  "tray": {
-    "enabled": true,
-    "showBalloonOnStart": true
-  }
-}
-```
+1. Download `HeadsetMicHotkey.exe` from the link above.
+2. Double-click it.
+3. Click **Record new hotkey** if you want to change the default `Shift + Z` mapping.
+4. Press the headset play/pause button.
+5. Close the main window when you are done configuring it; the app keeps running in the system tray.
 
-Supported modifier names include `LShift`, `RShift`, `Shift`, `LCtrl`, `RCtrl`, `Ctrl`, `LAlt`, `RAlt`, and `Alt`.
+The main window contains the controls most people need:
 
-Single letter keys such as `Z`, `A`, or `K` are supported.
+- **Mapping** — enable or pause the headset-button mapping
+- **Audio keep-alive** — keep compatible headset/audio endpoints awake
+- **Run at startup** — start the app automatically with Windows
+- **Record new hotkey** — capture a new keyboard shortcut
+- **Test** — send the configured shortcut without using the headset button
+- **Advanced** — timing and keep-alive options
 
-## Logs
+## Custom shortcuts
 
-Logs are written to:
+The GUI records shortcuts directly. You do not need to edit JSON manually.
+
+Examples include:
 
 ```text
-HeadsetButtonHotkey\logs
+Shift + Z
+Ctrl + Shift + M
+Ctrl + Alt + Space
+Win + Shift + S
+F8
+Space
 ```
 
-The log folder is intentionally ignored by Git.
+The shortcut is saved automatically and restored the next time the app starts.
 
-## Why Audio Keep-Alive Exists
+## System tray behavior
 
-Some 3.5mm inline headset buttons do not behave like always-on keyboard devices. On certain Windows audio drivers, the play/pause button only becomes reliable after an audio session wakes the headset/audio endpoint.
+Closing the main window does **not** exit the app. It hides the window and leaves the application running in the Windows notification area.
 
-This utility can loop a very quiet generated WAV file in the background to keep that path active. If your headset button works without it, set:
+From the tray icon you can:
 
-```json
-"audioKeepAlive": {
-  "enabled": false
-}
+- Open the main window
+- Pause / enable mapping
+- Test the current shortcut
+- Open the log folder
+- Exit completely
+
+## Audio keep-alive
+
+Some 3.5 mm inline headset buttons are not exposed as always-active keyboard devices. On some audio drivers the play/pause button becomes more reliable while an audio session keeps the endpoint awake.
+
+HeadsetMicHotkey can generate and loop a very quiet WAV signal in the background. If your headset works reliably without it, turn **Audio keep-alive** off in the main window.
+
+## Settings and logs
+
+Application data is stored outside the EXE, so replacing the executable with a newer version does not normally reset your settings.
+
+```text
+%LocalAppData%\HeadsetMicHotkey\
 ```
+
+Logs are stored in:
+
+```text
+%LocalAppData%\HeadsetMicHotkey\logs\
+```
+
+The log records headset detection and shortcut injection attempts, which makes it useful for troubleshooting.
 
 ## Troubleshooting
 
-If the tray app is running but the button does nothing:
+If the headset button is detected but the target application does not react:
 
-- Make sure no older debug or visible window version is running at the same time.
-- Right-click the tray icon and choose `Test hotkey`.
-- Open the log folder from the tray menu and check the latest log file.
-- Try running `start-headset-button-hotkey-visible.cmd` to see live output.
-- If the target app is running as administrator, run this utility as administrator too.
+1. Use **Test** first. If Test works, the output shortcut path is fine and the issue is likely related to headset input handling.
+2. Open the log folder from the tray menu and inspect the newest log.
+3. Confirm the shortcut works when pressed manually in the target application.
+4. If the target application runs elevated, try running HeadsetMicHotkey with the same privilege level.
+5. Make sure an older copy of HeadsetMicHotkey is not still running.
 
-Debug helpers are available in the `tools` folder.
+v2.0.1 includes corrected Win32 `SendInput` structures plus a compatibility fallback for keyboard injection.
 
-## Requirements
+## Build from source
 
-- Windows
-- PowerShell
-- .NET Framework assemblies available on standard Windows installations
+Most users do **not** need to compile anything. GitHub Actions builds the Windows EXE automatically.
 
-No external dependencies are required.
+Source code for the current GUI version is in:
+
+```text
+HeadsetMicHotkeyV2/
+```
+
+The application targets .NET Framework 4.8 and Windows Forms. If you do want to build locally, open the project in Visual Studio / MSBuild and build the `Release` configuration.
+
+The repository workflow also regenerates the application icon and produces the compiled EXE automatically.
+
+## Legacy version
+
+The original PowerShell/CMD implementation is kept under:
+
+```text
+HeadsetButtonHotkey/
+```
+
+It is preserved for reference and troubleshooting, but the native GUI EXE is now the recommended version.
 
 ## License
 
